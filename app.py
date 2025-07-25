@@ -18,7 +18,7 @@ def load_data():
 
 df = load_data()
 
-# --- Normalization + Muse Score Logic ---
+# --- Normalize + Score Logic ---
 def normalize(series):
     return 100 * (series - series.min()) / (series.max() - series.min())
 
@@ -40,7 +40,7 @@ def base_score_from_agi(agi, pcpi):
 
 # --- UI ---
 st.set_page_config(page_title="Muse Score ZIP Dashboard", layout="wide")
-st.title("📊 Muse Score Dashboard (by ZIP)")
+st.title("📊 Muse Score Dashboard")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -61,7 +61,7 @@ if zip_code in df['zip'].values:
     RSF = normalize(df['RSF']).loc[row.name]
     ISF = normalize(df['Savings']).loc[row.name]
 
-    # Calculate Muse Score
+    # Muse Score Calculation
     base_score = base_score_from_agi(agi, row['PCPI'])
     adjustment = (
         15 * (COLI / 100) +
@@ -73,7 +73,7 @@ if zip_code in df['zip'].values:
     )
     final_score = min(850, round(base_score + adjustment))
 
-    # --- Display Block ---
+    # --- Display Panel ---
     col_info, col_gauge = st.columns([1.5, 2])
     with col_info:
         st.markdown(f"""
@@ -108,8 +108,6 @@ if zip_code in df['zip'].values:
         ))
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### 🗺️ Muse Score by ZIP (Scatter Map)")
-
     # --- Compute Muse Scores for All ZIPs ---
     df_copy = df.copy()
     df_copy['base_score'] = df_copy.apply(lambda x: base_score_from_agi(agi, x['PCPI']), axis=1)
@@ -123,8 +121,22 @@ if zip_code in df['zip'].values:
     )
     df_copy['muse_score'] = (df_copy['base_score'] + df_copy['adjustment']).clip(upper=850).round()
 
-    # --- Plot by ZIP ---
-    fig3 = px.scatter_geo(
+    st.markdown("### 🗺️ Your State Highlighted")
+    df_state = pd.DataFrame({'state': df['state_id'].unique()})
+    df_state['highlight'] = df_state['state'].apply(lambda x: 'Selected' if x == row['state_id'] else 'Other')
+    fig1 = px.choropleth(
+        df_state,
+        locations="state",
+        locationmode="USA-states",
+        color="highlight",
+        color_discrete_map={"Selected": "orange", "Other": "lightgray"},
+        scope="usa",
+        title="State Map"
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    st.markdown("### 🗺️ Muse Score by ZIP Code (Scatter Map)")
+    fig2 = px.scatter_geo(
         df_copy,
         lat='lat',
         lon='lng',
@@ -140,8 +152,8 @@ if zip_code in df['zip'].values:
         title="Muse Score by ZIP Code",
         scope="usa"
     )
-    fig3.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
-    st.plotly_chart(fig3, use_container_width=True)
+    fig2.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
+    st.plotly_chart(fig2, use_container_width=True)
 
 else:
     st.warning("ZIP code not found in the dataset. Please try another.")
