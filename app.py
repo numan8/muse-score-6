@@ -38,24 +38,28 @@ def base_score_from_agi(agi, pcpi):
     elif ratio < 2.5: return 800
     else: return 850
 
-# --- Page Layout ---
+# --- Page Setup ---
 st.set_page_config(page_title="Muse Score Dashboard", layout="wide")
-st.title("📊 Muse Score Dashboard")
 
-with st.container():
-    col1, col2 = st.columns(2)
-    with col1:
-        zip_code = st.text_input("📍 Enter ZIP Code", value="10001")
-    with col2:
-        agi = st.number_input("💰 Enter Your AGI", min_value=1000, max_value=1_000_000, step=1000, value=80000)
+st.markdown(
+    "<h2 style='text-align:center;'>📊 Muse Score Dashboard</h2>",
+    unsafe_allow_html=True
+)
 
-calculate = st.button("📈 Calculate Muse Score")
+# Input row
+col_input1, col_input2, col_input3 = st.columns([2, 2, 1])
+with col_input1:
+    zip_code = st.text_input("📍 ZIP Code", value="10001")
+with col_input2:
+    agi = st.number_input("💰 AGI", min_value=1000, max_value=1_000_000, step=1000, value=80000)
+with col_input3:
+    calculate = st.button("🎯 Calculate", use_container_width=True)
 
-# --- When Button is Pressed ---
+# Run calculation
 if calculate and zip_code in df['zip'].values:
     row = df[df['zip'] == zip_code].iloc[0]
 
-    # Normalize inputs
+    # Normalize
     COLI = inverse_normalize(df['COLI']).loc[row.name]
     TRF = inverse_normalize(df['TRF']).loc[row.name]
     PTR = inverse_normalize(df['PTR']).loc[row.name]
@@ -63,19 +67,18 @@ if calculate and zip_code in df['zip'].values:
     RSF = normalize(df['RSF']).loc[row.name]
     ISF = normalize(df['Savings']).loc[row.name]
 
-    # Muse Score
     base_score = base_score_from_agi(agi, row['PCPI'])
     adjustment = (
         15 * (COLI / 100) +
         10 * (TRF / 100) +
         10 * (PTR / 100) +
         10 * (SITF / 100) +
-        5 * (RSF / 100) +
-        5 * (ISF / 100)
+        5  * (RSF / 100) +
+        5  * (ISF / 100)
     )
     final_score = min(850, round(base_score + adjustment))
 
-    # Compute for all ZIPs
+    # Precompute scores for map
     df_copy = df.copy()
     df_copy['base_score'] = df_copy.apply(lambda x: base_score_from_agi(agi, x['PCPI']), axis=1)
     df_copy['adjustment'] = (
@@ -88,20 +91,20 @@ if calculate and zip_code in df['zip'].values:
     )
     df_copy['muse_score'] = (df_copy['base_score'] + df_copy['adjustment']).clip(upper=850).round()
 
-    # --- Layout as Grid View ---
-    col_top_left, col_top_right = st.columns([1.5, 2])
-    with col_top_left:
+    # --- Top Row: Summary + Gauge ---
+    top_left, top_right = st.columns([1.3, 2])
+    with top_left:
         st.markdown(f"""
-        <div style="font-size:18px; background-color:#f9f9f9; padding:15px; border-radius:10px;">
-        <strong>State:</strong> <span style="color:#1f77b4">{row['state_id']}</span><br>
-        <strong>City:</strong> <span style="color:#1f77b4">{row['city']}</span><br>
-        <strong>Muse Score:</strong> <span style="color:#1f77b4">{final_score}</span><br>
-        <strong>Cost of Living Index:</strong> <span style="color:#1f77b4">{row['COLI']}</span><br>
-        <strong>Per Capita Income:</strong> <span style="color:#1f77b4">${int(row['PCPI']):,}</span>
+        <div style="font-size:16px; padding:10px; background-color:#f5f5f5; border-radius:8px;">
+        <b>State:</b> {row['state_id']}<br>
+        <b>City:</b> {row['city']}<br>
+        <b>Muse Score:</b> <span style="color:#1f77b4">{final_score}</span><br>
+        <b>COLI:</b> {row['COLI']}<br>
+        <b>PCPI:</b> ${int(row['PCPI']):,}
         </div>
         """, unsafe_allow_html=True)
 
-    with col_top_right:
+    with top_right:
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=final_score,
@@ -121,11 +124,12 @@ if calculate and zip_code in df['zip'].values:
                 }
             }
         ))
+        fig.update_layout(height=200, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
-    # Middle row with 2 maps
-    col_map1, col_map2 = st.columns(2)
-    with col_map1:
+    # --- Bottom Row: 2 Maps ---
+    map_col1, map_col2 = st.columns(2)
+    with map_col1:
         df_state = pd.DataFrame({'state': df['state_id'].unique()})
         df_state['highlight'] = df_state['state'].apply(lambda x: 'Selected' if x == row['state_id'] else 'Other')
         fig1 = px.choropleth(
@@ -135,11 +139,12 @@ if calculate and zip_code in df['zip'].values:
             color="highlight",
             color_discrete_map={"Selected": "orange", "Other": "lightgray"},
             scope="usa",
-            title="Selected State Highlighted"
+            title="📍 Selected State"
         )
+        fig1.update_layout(height=320, margin={"r":0,"t":30,"l":0,"b":0})
         st.plotly_chart(fig1, use_container_width=True)
 
-    with col_map2:
+    with map_col2:
         fig2 = px.scatter_geo(
             df_copy,
             lat='lat',
@@ -153,11 +158,11 @@ if calculate and zip_code in df['zip'].values:
                 [1.0, "darkgreen"]
             ],
             range_color=(300, 850),
-            title="Muse Score by ZIP Code",
+            title="🗺️ Muse Score by ZIP",
             scope="usa"
         )
-        fig2.update_layout(height=400, margin={"r":0,"t":40,"l":0,"b":0})
+        fig2.update_layout(height=320, margin={"r":0,"t":30,"l":0,"b":0})
         st.plotly_chart(fig2, use_container_width=True)
 
 elif calculate:
-    st.error("❌ ZIP code not found in the dataset. Please enter a valid ZIP code.")
+    st.error("❌ ZIP code not found. Please enter a valid ZIP.")
