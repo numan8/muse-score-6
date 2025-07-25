@@ -13,12 +13,12 @@ def load_data():
     numeric_cols = ['COLI', 'TRF', 'PCPI', 'PTR', 'TR', 'RSF', 'Savings']
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    df.dropna(subset=numeric_cols, inplace=True)
+    df.dropna(subset=numeric_cols + ['lat', 'lng'], inplace=True)
     return df
 
 df = load_data()
 
-# --- Normalize + Score Utils ---
+# --- Normalization + Muse Score Logic ---
 def normalize(series):
     return 100 * (series - series.min()) / (series.max() - series.min())
 
@@ -38,14 +38,14 @@ def base_score_from_agi(agi, pcpi):
     elif ratio < 2.5: return 800
     else: return 850
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Muse Score Dashboard", layout="wide")
-st.title("📊 Muse Score Dashboard")
+# --- UI ---
+st.set_page_config(page_title="Muse Score ZIP Dashboard", layout="wide")
+st.title("📊 Muse Score Dashboard (by ZIP)")
 
-colz1, colz2 = st.columns(2)
-with colz1:
+col1, col2 = st.columns(2)
+with col1:
     zip_code = st.text_input("📍 Enter ZIP Code", value="10001")
-with colz2:
+with col2:
     agi = st.number_input("💰 Enter Your AGI", min_value=1000, max_value=1_000_000, step=1000, value=80000)
 
 st.markdown("---")
@@ -53,7 +53,7 @@ st.markdown("---")
 if zip_code in df['zip'].values:
     row = df[df['zip'] == zip_code].iloc[0]
 
-    # Normalize
+    # Normalize values
     COLI = inverse_normalize(df['COLI']).loc[row.name]
     TRF = inverse_normalize(df['TRF']).loc[row.name]
     PTR = inverse_normalize(df['PTR']).loc[row.name]
@@ -61,6 +61,7 @@ if zip_code in df['zip'].values:
     RSF = normalize(df['RSF']).loc[row.name]
     ISF = normalize(df['Savings']).loc[row.name]
 
+    # Calculate Muse Score
     base_score = base_score_from_agi(agi, row['PCPI'])
     adjustment = (
         15 * (COLI / 100) +
@@ -72,9 +73,9 @@ if zip_code in df['zip'].values:
     )
     final_score = min(850, round(base_score + adjustment))
 
-    # --- Display Panel ---
-    col1, col2 = st.columns([1.5, 2])
-    with col1:
+    # --- Display Block ---
+    col_info, col_gauge = st.columns([1.5, 2])
+    with col_info:
         st.markdown(f"""
         <div style="font-size:18px;">
         <strong>State:</strong> <span style="color:#1f77b4">{row['state_id']}</span><br>
@@ -85,7 +86,7 @@ if zip_code in df['zip'].values:
         </div>
         """, unsafe_allow_html=True)
 
-    with col2:
+    with col_gauge:
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=final_score,
@@ -107,25 +108,9 @@ if zip_code in df['zip'].values:
         ))
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("### 🗺️ Financial Maps")
+    st.markdown("### 🗺️ Muse Score by ZIP (Scatter Map)")
 
-    # --- Highlighted State Map ---
-    with st.container():
-        df_state = pd.DataFrame({'state': df['state_id'].unique()})
-        df_state['highlight'] = df_state['state'].apply(lambda x: 'Selected' if x == row['state_id'] else 'Other')
-
-        fig1 = px.choropleth(
-            df_state,
-            locations="state",
-            locationmode="USA-states",
-            color="highlight",
-            color_discrete_map={"Selected": "orange", "Other": "lightgray"},
-            scope="usa",
-            title="Your State Highlighted"
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-
-    # --- Choropleth by Avg Muse Score ---
+    # --- Compute Muse Scores for All ZIPs ---
     df_copy = df.copy()
     df_copy['base_score'] = df_copy.apply(lambda x: base_score_from_agi(agi, x['PCPI']), axis=1)
     df_copy['adjustment'] = (
@@ -137,25 +122,26 @@ if zip_code in df['zip'].values:
         5  * (normalize(df_copy['Savings']) / 100)
     )
     df_copy['muse_score'] = (df_copy['base_score'] + df_copy['adjustment']).clip(upper=850).round()
-    state_avg = df_copy.groupby("state_id")["muse_score"].mean().reset_index()
-    state_avg.columns = ['state', 'avg_muse_score']
 
-    fig2 = px.choropleth(
-        state_avg,
-        locations="state",
-        locationmode="USA-states",
-        color="avg_muse_score",
+    # --- Plot by ZIP ---
+    fig3 = px.scatter_geo(
+        df_copy,
+        lat='lat',
+        lon='lng',
+        color='muse_score',
+        hover_name='zip',
         color_continuous_scale=[
             [0.0, "red"],
             [0.5, "yellow"],
             [0.75, "lightgreen"],
             [1.0, "darkgreen"]
         ],
-        range_color=(state_avg['avg_muse_score'].min(), 850),
-        scope="usa",
-        title="Average Muse Score by State"
+        range_color=(300, 850),
+        title="Muse Score by ZIP Code",
+        scope="usa"
     )
-    st.plotly_chart(fig2, use_container_width=True)
+    fig3.update_layout(height=600, margin={"r":0,"t":40,"l":0,"b":0})
+    st.plotly_chart(fig3, use_container_width=True)
 
 else:
-    st.warning("ZIP code not found. Please enter a valid ZIP from the dataset.")
+    st.warning("ZIP code not found in the dataset. Please try another.")
