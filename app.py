@@ -5,6 +5,7 @@ import plotly.express as px
 
 # --- Load Data ---
 @st.cache_data
+
 def load_data():
     df = pd.read_excel("zip_code_demographics4.xlsx", dtype={'zip': str}, engine='openpyxl')
     df.columns = df.columns.str.strip()
@@ -103,8 +104,8 @@ if calculate and zip_code in df['zip'].values:
         <b>City:</b> {row['city']}<br>
         <b>Muse Score:</b> <span style="color:#1f77b4">{final_score}</span><br>
         <b>Status:</b> {score_label}<br>
-        <b>COLI:</b> {row['COLI']}<br>
-        <b>PCPI:</b> ${int(row['PCPI']):,}
+        <b>Cost of Living Index:</b> {row['COLI']}<br>
+        <b>Per Capita Income:</b> ${int(row['PCPI']):,}
         </div>
         """, unsafe_allow_html=True)
 
