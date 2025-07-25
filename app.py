@@ -38,24 +38,26 @@ def base_score_from_agi(agi, pcpi):
     elif ratio < 2.5: return 800
     else: return 850
 
-# --- Page Setup ---
+def label_from_score(score):
+    if score < 500: return "🔴 Financially Stressed"
+    elif score < 600: return "🟠 At Risk"
+    elif score < 700: return "🟡 Near Stable"
+    elif score < 800: return "🟢 Good"
+    else: return "🟢🟢 Excellent"
+
+# --- Layout ---
 st.set_page_config(page_title="Muse Score Dashboard", layout="wide")
+st.markdown("<h2 style='text-align:center;'>📊 Muse Score Dashboard</h2>", unsafe_allow_html=True)
 
-st.markdown(
-    "<h2 style='text-align:center;'>📊 Muse Score Dashboard</h2>",
-    unsafe_allow_html=True
-)
-
-# Input row
-col_input1, col_input2, col_input3 = st.columns([2, 2, 1])
-with col_input1:
+col1, col2, col3 = st.columns([2, 2, 1])
+with col1:
     zip_code = st.text_input("📍 ZIP Code", value="10001")
-with col_input2:
+with col2:
     agi = st.number_input("💰 AGI", min_value=1000, max_value=1_000_000, step=1000, value=80000)
-with col_input3:
+with col3:
     calculate = st.button("🎯 Calculate", use_container_width=True)
 
-# Run calculation
+# --- When Button is Pressed ---
 if calculate and zip_code in df['zip'].values:
     row = df[df['zip'] == zip_code].iloc[0]
 
@@ -77,6 +79,7 @@ if calculate and zip_code in df['zip'].values:
         5  * (ISF / 100)
     )
     final_score = min(850, round(base_score + adjustment))
+    score_label = label_from_score(final_score)
 
     # Precompute scores for map
     df_copy = df.copy()
@@ -99,6 +102,7 @@ if calculate and zip_code in df['zip'].values:
         <b>State:</b> {row['state_id']}<br>
         <b>City:</b> {row['city']}<br>
         <b>Muse Score:</b> <span style="color:#1f77b4">{final_score}</span><br>
+        <b>Status:</b> {score_label}<br>
         <b>COLI:</b> {row['COLI']}<br>
         <b>PCPI:</b> ${int(row['PCPI']):,}
         </div>
@@ -127,7 +131,7 @@ if calculate and zip_code in df['zip'].values:
         fig.update_layout(height=200, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- Bottom Row: 2 Maps ---
+    # --- Bottom Row: Maps ---
     map_col1, map_col2 = st.columns(2)
     with map_col1:
         df_state = pd.DataFrame({'state': df['state_id'].unique()})
