@@ -7,6 +7,12 @@ import plotly.express as px
 @st.cache_data
 def load_data():
     df = pd.read_excel("zip_code_demographics4.xlsx", dtype={'zip': str}, engine='openpyxl')
+    df.columns = df.columns.str.strip()
+    
+    # Derived column if RSF not provided
+    if 'RSF' not in df.columns:
+        df['RSF'] = df['number_of_returns'] / df['population']
+    
     numeric_cols = ['COLI', 'TRF', 'PCPI', 'PTR', 'TR', 'RSF', 'Savings']
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -22,7 +28,7 @@ def normalize(series):
 def inverse_normalize(series):
     return 100 * (series.max() - series) / (series.max() - series.min())
 
-# --- Base Score Calculator ---
+# --- Muse Score Formula ---
 def base_score_from_agi(agi, pcpi):
     ratio = agi / pcpi
     if ratio < 0.6: return 350, "🔴 Critical Financial Stress"
@@ -36,11 +42,10 @@ def base_score_from_agi(agi, pcpi):
     elif ratio < 2.5: return 800, "🟢 Excellent"
     else: return 850, "🟢 Top Performer (Cap)"
 
-# --- Layout ---
+# --- Streamlit Layout ---
 st.set_page_config(page_title="Muse Score Dashboard", layout="wide")
 st.title("📊 Muse Score Dashboard")
 
-# Input Panel
 with st.container():
     col1, col2 = st.columns(2)
     with col1:
@@ -50,7 +55,6 @@ with st.container():
 
 st.markdown("---")
 
-# Process
 if zip_code in df['zip'].values:
     row = df[df['zip'] == zip_code].iloc[0]
 
@@ -62,7 +66,6 @@ if zip_code in df['zip'].values:
     RSF = normalize(df['RSF']).loc[row.name]
     ISF = normalize(df['Savings']).loc[row.name]
 
-    # Score
     base_score, status = base_score_from_agi(agi, row['PCPI'])
     adjustment = (
         15 * (COLI / 100) +
@@ -74,25 +77,25 @@ if zip_code in df['zip'].values:
     )
     final_score = min(850, round(base_score + adjustment))
 
-    # --- Results ---
-    st.markdown("### 🧠 Muse Score Insights")
-    col1, col2 = st.columns([1.5, 2])
-    with col1:
+    # --- Info & Gauge ---
+    st.markdown("### 🎯 Muse Score Results")
+    col3, col4 = st.columns([1.5, 2])
+    with col3:
         st.markdown(f"""
         <div style="font-size:18px;">
         <strong>State:</strong> <span style="color:#1f77b4">{row['state_id']}</span><br>
         <strong>City:</strong> <span style="color:#1f77b4">{row['city']}</span><br>
-        <strong><span style="color:#1f77b4">Muse Score:</span></strong> {final_score}<br>
+        <strong>Muse Score:</strong> <span style="color:#1f77b4">{final_score}</span><br>
         <strong>Cost of Living Index:</strong> <span style="color:#1f77b4">{row['COLI']}</span><br>
-        <strong>Per Capita Income:</strong> <span style="color:#1f77b4">{int(row['PCPI'])}</span>
+        <strong>Per Capita Income:</strong> <span style="color:#1f77b4">${int(row['PCPI']):,}</span>
         </div>
         """, unsafe_allow_html=True)
 
-    with col2:
+    with col4:
         fig = go.Figure(go.Indicator(
             mode="gauge+number",
             value=final_score,
-            title={'text': f"Muse Score"},
+            title={'text': "Muse Score"},
             gauge={
                 'axis': {'range': [300, 850]},
                 'steps': [
@@ -112,15 +115,15 @@ if zip_code in df['zip'].values:
 
     st.markdown("---")
 
-    # --- Maps Section ---
+    # --- Maps ---
     st.markdown("### 🗺️ ZIP Code Maps")
-    col3, col4 = st.columns(2)
+    col5, col6 = st.columns(2)
 
-    with col3:
-        st.markdown("Muse Score Category Map (Placeholder)")
-        st.image("https://upload.wikimedia.org/wikipedia/commons/1/15/Blank_US_Map_%28states_only%29.svg", caption="You can embed a Tableau map here")
+    with col5:
+        st.markdown("Muse Score Category Map (Static)")
+        st.image("https://upload.wikimedia.org/wikipedia/commons/1/15/Blank_US_Map_%28states_only%29.svg", caption="Static placeholder — replace with Tableau embed or shapefile-based map")
 
-    with col4:
+    with col6:
         fig_map = px.scatter_geo(
             df,
             lat="lat", lon="lng",
@@ -135,4 +138,3 @@ if zip_code in df['zip'].values:
 
 else:
     st.info("Please enter a valid ZIP code to view Muse Score details.")
-
