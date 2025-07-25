@@ -145,7 +145,13 @@ if zip_code in df['zip'].values:
         locations="state",
         locationmode="USA-states",
         color="avg_muse_score",
-        color_continuous_scale="Viridis",
+        color_continuous_scale=[
+            [0.0, "red"],
+            [0.5, "yellow"],
+            [0.75, "lightgreen"],
+            [1.0, "darkgreen"]
+        ],
+        range_color=(state_avg['avg_muse_score'].min(), 850),
         scope="usa",
         title="Average Muse Score by State"
     )
